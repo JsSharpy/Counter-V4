@@ -1,0 +1,2264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Counter — Sales &amp; Inventory</title>
+<meta name="description" content="Point-of-sale, inventory, and utang tracker for sari-sari stores." />
+
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0a0a0a" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Counter" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.28.5/babel.min.js"></script>
+
+<style>
+  html, body { background:#0a0a0a; overscroll-behavior-y: none; }
+  body { font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif; margin: 0; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="min-height:100vh;background:#0a0a0a;color:#8c8a84;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Georgia,serif;padding:24px;text-align:center;">
+    <div style="width:32px;height:32px;border:3px solid #2b2b2b;border-top-color:#E3A93C;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px;"></div>
+    <div style="font-size:14px;">Loading Counter…</div>
+  </div>
+</div>
+<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+<script>
+  setTimeout(function () {
+    var root = document.getElementById("root");
+    if (root && root.querySelector(".counter-app-mounted") === null) {
+      root.innerHTML =
+        '<div style="min-height:100vh;background:#0a0a0a;color:#f3f1ea;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Georgia,serif;padding:24px;text-align:center;">' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">Couldn\'t load the app</div>' +
+        '<div style="font-size:13px;color:#8c8a84;margin-bottom:20px;max-width:320px;">This usually means a slow/unstable connection, or a script was blocked. Check your signal and reload.</div>' +
+        '<button onclick="window.location.reload()" style="background:#E3A93C;color:#141414;font-weight:700;border:none;border-radius:10px;padding:10px 20px;font-size:14px;">Reload</button>' +
+        "</div>";
+    }
+  }, 8000);
+</script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+// ---------- lightweight inline icons (no external icon package needed) ----------
+function Icon({ children, size = 20, color = "currentColor", strokeWidth = 2, style }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      {children}
+    </svg>
+  );
+}
+const Plus = (p) => <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>;
+const X = (p) => <Icon {...p}><path d="M18 6 6 18M6 6l12 12" /></Icon>;
+const Search = (p) => <Icon {...p}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></Icon>;
+const Package = (p) => <Icon {...p}><path d="M16.5 9.4 7.5 4.21" /><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="M3.27 6.96 12 12.01l8.73-5.05" /><path d="M12 22.08V12" /></Icon>;
+const Receipt = (p) => <Icon {...p}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M16 8h-6" /><path d="M14 12h-4" /></Icon>;
+const Users = (p) => <Icon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Icon>;
+const BarChart3 = (p) => <Icon {...p}><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></Icon>;
+const Trash2 = (p) => <Icon {...p}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
+const Check = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5" /></Icon>;
+const ChevronRight = (p) => <Icon {...p}><path d="m9 18 6-6-6-6" /></Icon>;
+const ChevronDown = (p) => <Icon {...p}><path d="m6 9 6 6 6-6" /></Icon>;
+const Minus = (p) => <Icon {...p}><path d="M5 12h14" /></Icon>;
+const Settings = (p) => <Icon {...p}><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></Icon>;
+const Copy = (p) => <Icon {...p}><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></Icon>;
+const ClipboardPaste = (p) => <Icon {...p}><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" /><path d="M16 4h2a2 2 0 0 1 2 2v4" /><path d="M21 14H11" /><path d="m15 10-4 4 4 4" /></Icon>;
+const AlertTriangle = (p) => <Icon {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></Icon>;
+const Pencil = (p) => <Icon {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></Icon>;
+const Lock = (p) => <Icon {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></Icon>;
+const TrendingUp = (p) => <Icon {...p}><path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" /></Icon>;
+const Undo2 = (p) => <Icon {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" /></Icon>;
+const ClipboardList = (p) => <Icon {...p}><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" /></Icon>;
+const Delete = (p) => <Icon {...p}><path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" /><line x1="18" x2="12" y1="9" y2="15" /><line x1="12" x2="18" y1="9" y2="15" /></Icon>;
+const Truck = (p) => <Icon {...p}><path d="M14 18V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h1" /><path d="M15 18H9" /><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" /><circle cx="17" cy="18" r="2" /><circle cx="7" cy="18" r="2" /></Icon>;
+const History = (p) => <Icon {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></Icon>;
+const Wallet = (p) => <Icon {...p}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></Icon>;
+
+// ---------- design tokens ----------
+const BG = "#0a0a0a";
+const CARD = "#151515";
+const CARD2 = "#1c1c1c";
+const BORDER = "#2b2b2b";
+const GOLD = "#E3A93C";
+const GOLD_DIM = "#3a2f16";
+const TEXT = "#f3f1ea";
+const MUTED = "#8c8a84";
+const DANGER = "#d9694f";
+const DANGER_DIM = "#3a2018";
+const SERIF = "Georgia, 'Iowan Old Style', 'Palatino Linotype', serif";
+
+const peso = (n) =>
+  "\u20B1" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const fmtQty = (n, unit) => (unit === "kg" ? Number(n).toFixed(2) + " kg" : Number(n) + " pc");
+
+const fmtDate = (ts) =>
+  new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+const fmtDateShort = (ts) => new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+const sameDay = (ts, ref = Date.now()) => new Date(ts).toDateString() === new Date(ref).toDateString();
+const todayKey = () => new Date().toDateString();
+
+const startOfDay = (ts) => {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+const endOfDay = (ts) => {
+  const d = new Date(ts);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
+const startOfWeek = (ts = Date.now()) => {
+  const d = new Date(ts);
+  const day = d.getDay(); // 0 = Sunday
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+const startOfMonth = (ts = Date.now()) => {
+  const d = new Date(ts);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const remainingOf = (sale) => Math.max(0, Number(sale.total) - Number(sale.paidAmount || 0));
+const marginRateOf = (sale) => (sale.total > 0 ? (sale.total - (sale.totalCost || 0)) / sale.total : 0);
+
+const DEFAULT_THRESHOLD = { piece: 5, kg: 1 };
+const thresholdOf = (p) => (p.lowStockThreshold !== undefined && p.lowStockThreshold !== null && p.lowStockThreshold !== "" ? Number(p.lowStockThreshold) : DEFAULT_THRESHOLD[p.soldBy]);
+const isOut = (p) => Number(p.stock) <= 0;
+const isLow = (p) => !isOut(p) && Number(p.stock) <= thresholdOf(p);
+
+const CATEGORY_SUGGESTIONS = ["Inumin", "Meryenda", "De lata", "Toiletries", "Iba pa"];
+const UNCATEGORIZED = "Uncategorized";
+
+const BACKUP_VERSION = 2;
+const BACKUP_REMIND_AFTER = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+function inRange(ts, range, customStart, customEnd) {
+  if (range === "today") return sameDay(ts);
+  if (range === "week") return ts >= startOfWeek();
+  if (range === "month") return ts >= startOfMonth();
+  if (range === "all") return true;
+  if (range === "custom") {
+    const s = customStart ? startOfDay(new Date(customStart).getTime()) : -Infinity;
+    const e = customEnd ? endOfDay(new Date(customEnd).getTime()) : Infinity;
+    return ts >= s && ts <= e;
+  }
+  return true;
+}
+
+function groupByCategory(products) {
+  const map = {};
+  products.forEach((p) => {
+    const cat = p.category && p.category.trim() ? p.category.trim() : UNCATEGORIZED;
+    if (!map[cat]) map[cat] = [];
+    map[cat].push(p);
+  });
+  return Object.keys(map)
+    .sort((a, b) => (a === UNCATEGORIZED ? 1 : b === UNCATEGORIZED ? -1 : a.localeCompare(b)))
+    .map((cat) => ({ cat, items: map[cat] }));
+}
+
+function CounterApp() {
+  const [tab, setTab] = useState("sell");
+  const [products, setProducts] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [customers, setCustomers] = useState({});
+  const [deliveries, setDeliveries] = useState([]);
+  const [cashLogs, setCashLogs] = useState([]);
+  const [cashSessions, setCashSessions] = useState({});
+  const [settings, setSettings] = useState({ pinEnabled: false, pin: null, lastBackupAt: null, backupReminderDismissedUntil: null });
+  const [ready, setReady] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+
+  // ---------- persistence (private to this device, via localStorage) ----------
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("counter-data");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setProducts(parsed.products || []);
+        setSales(parsed.sales || []);
+        setCustomers(parsed.customers || {});
+        setDeliveries(parsed.deliveries || []);
+        setCashLogs(parsed.cashLogs || []);
+        setCashSessions(parsed.cashSessions || {});
+        setSettings((s) => ({ ...s, ...(parsed.settings || {}) }));
+        if (!(parsed.settings && parsed.settings.pinEnabled && parsed.settings.pin)) setUnlocked(true);
+      } else {
+        setUnlocked(true);
+      }
+    } catch (e) {
+      setUnlocked(true);
+    }
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      localStorage.setItem("counter-data", JSON.stringify({ products, sales, customers, deliveries, cashLogs, cashSessions, settings }));
+    } catch (e) {
+      // storage full or unavailable — data stays in memory for this session
+    }
+  }, [products, sales, customers, deliveries, cashLogs, cashSessions, settings, ready]);
+
+  // ---------- modals ----------
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
+  const [restockProduct, setRestockProduct] = useState(null);
+  const [cart, setCart] = useState([]);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [expandedCustomer, setExpandedCustomer] = useState(null);
+  const [editCustomer, setEditCustomer] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialMode, setSettingsInitialMode] = useState("export");
+  const [showClosing, setShowClosing] = useState(false);
+  const [showDelivery, setShowDelivery] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showCashDrawer, setShowCashDrawer] = useState(false);
+
+  // ---------- derived ----------
+  const totalStockPieces = products.filter((p) => p.soldBy === "piece").reduce((s, p) => s + Number(p.stock || 0), 0);
+  const totalStockKg = products.filter((p) => p.soldBy === "kg").reduce((s, p) => s + Number(p.stock || 0), 0);
+  const lowStockProducts = products.filter((p) => isLow(p) || isOut(p));
+
+  const applyPayment = (customerName, amount) => {
+    let left = Number(amount);
+    if (left <= 0) return;
+    setSales((prev) => {
+      const next = prev.map((s) => ({ ...s, payments: s.payments ? [...s.payments] : [] }));
+      const debts = next.filter((s) => s.customer === customerName && remainingOf(s) > 0.001).sort((a, b) => a.timestamp - b.timestamp);
+      for (const sale of debts) {
+        if (left <= 0.001) break;
+        const owed = remainingOf(sale);
+        const alloc = Math.min(owed, left);
+        sale.paidAmount = Number((Number(sale.paidAmount || 0) + alloc).toFixed(2));
+        sale.payments.push({ id: uid(), amount: alloc, timestamp: Date.now() });
+        left = Number((left - alloc).toFixed(2));
+      }
+      return next;
+    });
+  };
+
+  const undoLastSale = () => {
+    if (sales.length === 0) return;
+    const lastBatch = sales[sales.length - 1].batchId;
+    const toUndo = lastBatch ? sales.filter((s) => s.batchId === lastBatch) : [sales[sales.length - 1]];
+    setSales((s) => s.filter((sale) => !toUndo.includes(sale)));
+    setProducts((ps) =>
+      ps.map((p) => {
+        const match = toUndo.find((s) => s.productId === p.id);
+        return match ? { ...p, stock: Number(p.stock) + Number(match.qty) } : p;
+      })
+    );
+  };
+
+  const addToCart = (product, delta) => {
+    setCart((prev) => {
+      const stock = Number(product.stock);
+      const existing = prev.find((c) => c.productId === product.id);
+      if (existing) {
+        const newQty = Math.max(0, Math.min(stock, Number((existing.qty + delta).toFixed(2))));
+        if (newQty <= 0) return prev.filter((c) => c.productId !== product.id);
+        return prev.map((c) => (c.productId === product.id ? { ...c, qty: newQty } : c));
+      }
+      if (delta <= 0) return prev;
+      const step = product.soldBy === "kg" ? 0.1 : 1;
+      return [...prev, { productId: product.id, name: product.name, soldBy: product.soldBy, price: product.price, cost: product.cost || 0, qty: Math.min(stock, step) }];
+    });
+  };
+
+  const setCartQty = (productId, qty, stock) => {
+    setCart((prev) => {
+      const clamped = Math.max(0, Math.min(stock, qty));
+      if (clamped <= 0) return prev.filter((c) => c.productId !== productId);
+      return prev.map((c) => (c.productId === productId ? { ...c, qty: clamped } : c));
+    });
+  };
+
+  const removeFromCart = (productId) => setCart((prev) => prev.filter((c) => c.productId !== productId));
+
+  const setCashOpening = (amount) => {
+    setCashSessions((s) => ({ ...s, [todayKey()]: { ...s[todayKey()], opening: Number(amount) } }));
+  };
+  const setCashClosing = (amount) => {
+    setCashSessions((s) => ({ ...s, [todayKey()]: { ...s[todayKey()], closing: Number(amount) } }));
+  };
+  const addCashLog = (amount, reason) => {
+    setCashLogs((ls) => [...ls, { id: uid(), amount: Number(amount), reason: reason.trim(), timestamp: Date.now() }]);
+  };
+  const removeCashLog = (id) => setCashLogs((ls) => ls.filter((l) => l.id !== id));
+
+  const applyDelivery = (edits) => {
+    const items = [];
+    const nextProducts = products.map((p) => {
+      const e = edits[p.id];
+      const touched = e && ((e.price ?? "") !== "" || (e.cost ?? "") !== "" || (e.addQty ?? "") !== "");
+      if (!touched) return p;
+      const next = { ...p };
+      if (e.price !== undefined && e.price !== "") next.price = Number(e.price);
+      if (e.cost !== undefined && e.cost !== "") next.cost = Number(e.cost);
+      if (e.addQty !== undefined && e.addQty !== "") next.stock = Number(p.stock) + Number(e.addQty);
+      items.push({
+        productId: p.id,
+        name: p.name,
+        soldBy: p.soldBy,
+        oldPrice: p.price,
+        newPrice: next.price,
+        oldCost: p.cost || 0,
+        newCost: next.cost || 0,
+        addedQty: e.addQty !== undefined && e.addQty !== "" ? Number(e.addQty) : 0,
+      });
+      return next;
+    });
+    setProducts(nextProducts);
+    if (items.length > 0) {
+      setDeliveries((ds) => [...ds, { id: uid(), timestamp: Date.now(), items }]);
+    }
+  };
+
+  const cartTotal = cart.reduce((s, c) => s + c.qty * c.price, 0);
+  const cartCount = cart.reduce((s, c) => s + c.qty, 0);
+
+  const checkoutCart = ({ customer, isPaid }) => {
+    const batchId = uid();
+    const now = Date.now();
+    const newSales = cart.map((c) => {
+      const total = Number((c.qty * c.price).toFixed(2));
+      const totalCost = Number((c.qty * c.cost).toFixed(2));
+      return {
+        id: uid(),
+        batchId,
+        productId: c.productId,
+        name: c.name,
+        soldBy: c.soldBy,
+        qty: c.qty,
+        unitPrice: c.price,
+        total,
+        totalCost,
+        customer: isPaid ? null : customer,
+        paidAmount: isPaid ? total : 0,
+        payments: isPaid ? [{ id: uid(), amount: total, timestamp: now }] : [],
+        timestamp: now,
+      };
+    });
+    setSales((s) => [...s, ...newSales]);
+    setProducts((ps) =>
+      ps.map((p) => {
+        const inCart = cart.find((c) => c.productId === p.id);
+        return inCart ? { ...p, stock: Math.max(0, Number(p.stock) - inCart.qty) } : p;
+      })
+    );
+    setCart([]);
+    setShowCheckout(false);
+  };
+
+  const importData = (parsed) => {
+    setProducts(parsed.products || []);
+    setSales(parsed.sales || []);
+    setCustomers(parsed.customers || {});
+    if (parsed.settings) setSettings((s) => ({ ...s, ...parsed.settings, pinEnabled: s.pinEnabled, pin: s.pin }));
+  };
+
+  const showBackupBanner =
+    ready &&
+    unlocked &&
+    (products.length > 0 || sales.length > 0) &&
+    (!settings.lastBackupAt || Date.now() - settings.lastBackupAt > BACKUP_REMIND_AFTER) &&
+    (!settings.backupReminderDismissedUntil || Date.now() > settings.backupReminderDismissedUntil);
+
+  if (!ready) return <div style={{ height: "100vh", background: BG }} />;
+
+  if (!unlocked) {
+    return (
+      <LockScreen
+        pin={settings.pin}
+        onUnlock={() => setUnlocked(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="counter-app-mounted"
+      style={{
+        fontFamily: SERIF,
+        background: BG,
+        color: TEXT,
+        height: "100vh",
+        maxWidth: 480,
+        margin: "0 auto",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        overflow: "hidden",
+        lineHeight: 1.5,
+        letterSpacing: 0.1,
+      }}
+    >
+      <Header onSettings={() => { setSettingsInitialMode("export"); setShowSettings(true); }} lowStockCount={lowStockProducts.length} />
+
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 88 }}>
+        {showBackupBanner && (
+          <BackupBanner
+            onBackup={() => { setSettingsInitialMode("export"); setShowSettings(true); }}
+            onDismiss={() => setSettings((s) => ({ ...s, backupReminderDismissedUntil: Date.now() + 24 * 60 * 60 * 1000 }))}
+          />
+        )}
+
+        {tab === "sell" && <SellTab products={products} cart={cart} onAddToCart={addToCart} />}
+        {tab === "stock" && (
+          <StockTab
+            products={products}
+            onAdd={() => setShowAddProduct(true)}
+            onEdit={(p) => setEditProduct(p)}
+            onRestock={(p) => setRestockProduct(p)}
+            onDelivery={() => setShowDelivery(true)}
+            onHistory={() => setShowHistory(true)}
+          />
+        )}
+        {tab === "utang" && (
+          <UtangTab
+            sales={sales}
+            customers={customers}
+            expandedCustomer={expandedCustomer}
+            setExpandedCustomer={setExpandedCustomer}
+            applyPayment={applyPayment}
+            onEditInfo={(name) => setEditCustomer(name)}
+          />
+        )}
+        {tab === "reports" && (
+          <ReportsTab
+            sales={sales}
+            totalStockPieces={totalStockPieces}
+            totalStockKg={totalStockKg}
+            onUndoLast={undoLastSale}
+            onOpenClosing={() => setShowClosing(true)}
+            onOpenCashDrawer={() => setShowCashDrawer(true)}
+          />
+        )}
+      </div>
+
+      {cart.length > 0 && <CartBar count={cartCount} total={cartTotal} onCheckout={() => setShowCheckout(true)} />}
+
+      <BottomNav tab={tab} setTab={setTab} utangAlert={Object.keys(customers).length > 0} />
+
+      {showAddProduct && (
+        <ProductForm
+          onClose={() => setShowAddProduct(false)}
+          onSave={(prod) => {
+            setProducts((p) => [...p, { ...prod, id: uid() }]);
+            setShowAddProduct(false);
+          }}
+        />
+      )}
+
+      {editProduct && (
+        <ProductForm
+          initial={editProduct}
+          onClose={() => setEditProduct(null)}
+          onSave={(prod) => {
+            setProducts((ps) => ps.map((p) => (p.id === prod.id ? prod : p)));
+            setEditProduct(null);
+          }}
+          onDelete={() => {
+            setProducts((ps) => ps.filter((p) => p.id !== editProduct.id));
+            setEditProduct(null);
+          }}
+        />
+      )}
+
+      {restockProduct && (
+        <RestockSheet
+          product={restockProduct}
+          onClose={() => setRestockProduct(null)}
+          onConfirm={(addQty) => {
+            setProducts((ps) => ps.map((p) => (p.id === restockProduct.id ? { ...p, stock: Number(p.stock) + addQty } : p)));
+            setRestockProduct(null);
+          }}
+        />
+      )}
+
+      {showDelivery && (
+        <DeliverySheet
+          products={products}
+          onClose={() => setShowDelivery(false)}
+          onApply={applyDelivery}
+        />
+      )}
+
+      {showHistory && <DeliveryHistorySheet deliveries={deliveries} onClose={() => setShowHistory(false)} />}
+
+      {showCashDrawer && (
+        <CashDrawerSheet
+          sales={sales}
+          cashLogs={cashLogs}
+          cashSessions={cashSessions}
+          onClose={() => setShowCashDrawer(false)}
+          onSetOpening={setCashOpening}
+          onSetClosing={setCashClosing}
+          onAddLog={addCashLog}
+          onRemoveLog={removeCashLog}
+        />
+      )}
+
+      {showCheckout && (
+        <CheckoutSheet
+          cart={cart}
+          products={products}
+          onClose={() => setShowCheckout(false)}
+          onUpdateQty={setCartQty}
+          onRemove={removeFromCart}
+          onConfirm={checkoutCart}
+        />
+      )}
+
+      {editCustomer && (
+        <CustomerInfoSheet
+          name={editCustomer}
+          info={customers[editCustomer] || {}}
+          onClose={() => setEditCustomer(null)}
+          onSave={(info) => {
+            setCustomers((c) => ({ ...c, [editCustomer]: info }));
+            setEditCustomer(null);
+          }}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsSheet
+          products={products}
+          sales={sales}
+          customers={customers}
+          settings={settings}
+          initialMode={settingsInitialMode}
+          onClose={() => setShowSettings(false)}
+          onImport={importData}
+          onMarkBackedUp={() => setSettings((s) => ({ ...s, lastBackupAt: Date.now() }))}
+          onSetPin={(pin) => setSettings((s) => ({ ...s, pin, pinEnabled: true }))}
+          onRemovePin={() => setSettings((s) => ({ ...s, pin: null, pinEnabled: false }))}
+        />
+      )}
+
+      {showClosing && (
+        <ClosingSummarySheet sales={sales} products={lowStockProducts} onClose={() => setShowClosing(false)} />
+      )}
+    </div>
+  );
+}
+
+// ---------- lock screen ----------
+function LockScreen({ pin, onUnlock }) {
+  const [buf, setBuf] = useState("");
+  const [error, setError] = useState(false);
+  const target = pin || "";
+
+  useEffect(() => {
+    if (target && buf.length === target.length) {
+      if (buf === target) {
+        onUnlock();
+      } else {
+        setError(true);
+        setTimeout(() => {
+          setBuf("");
+          setError(false);
+        }, 450);
+      }
+    }
+  }, [buf]);
+
+  const press = (d) => {
+    if (buf.length < Math.max(target.length, 6)) setBuf((b) => b + d);
+  };
+  const backspace = () => setBuf((b) => b.slice(0, -1));
+
+  return (
+    <div
+      className="counter-app-mounted"
+      style={{
+        fontFamily: SERIF,
+        background: BG,
+        color: TEXT,
+        height: "100vh",
+        maxWidth: 480,
+        margin: "0 auto",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 24,
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ width: 48, height: 48, borderRadius: 12, background: GOLD, color: "#141414", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Lock size={22} />
+      </div>
+      <div style={{ fontSize: 20 }}>Enter PIN</div>
+      <div style={{ display: "flex", gap: 14 }}>
+        {Array.from({ length: target.length }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: "50%",
+              background: i < buf.length ? (error ? DANGER : GOLD) : "transparent",
+              border: `1px solid ${error ? DANGER : BORDER}`,
+            }}
+          />
+        ))}
+      </div>
+      {error && <div style={{ color: DANGER, fontSize: 13 }}>Mali ang PIN</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 64px)", gap: 16, marginTop: 8 }}>
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+          <button key={d} onClick={() => press(d)} style={keypadBtnStyle}>
+            {d}
+          </button>
+        ))}
+        <div />
+        <button onClick={() => press("0")} style={keypadBtnStyle}>
+          0
+        </button>
+        <button onClick={backspace} style={{ ...keypadBtnStyle, background: "transparent", border: "none" }}>
+          <Delete size={20} color={MUTED} />
+        </button>
+      </div>
+    </div>
+  );
+}
+const keypadBtnStyle = {
+  width: 64,
+  height: 64,
+  borderRadius: "50%",
+  background: CARD,
+  border: `1px solid ${BORDER}`,
+  color: TEXT,
+  fontSize: 22,
+  fontFamily: SERIF,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+// ---------- header ----------
+function Header({ onSettings, lowStockCount }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+      <div style={{ width: 34, height: 34, borderRadius: 8, background: GOLD, color: "#141414", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18 }}>
+        &#8369;
+      </div>
+      <div style={{ flex: 1, fontSize: 22 }}>Counter</div>
+      {lowStockCount > 0 && (
+        <div style={{ background: DANGER_DIM, color: DANGER, fontSize: 13, padding: "4px 10px", borderRadius: 20, border: `1px solid ${DANGER}` }}>
+          {lowStockCount} mababa
+        </div>
+      )}
+      <button onClick={onSettings} aria-label="Settings" style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 6, display: "flex" }}>
+        <Settings size={20} strokeWidth={1.8} />
+      </button>
+    </div>
+  );
+}
+
+function BackupBanner({ onBackup, onDismiss }) {
+  return (
+    <div
+      style={{
+        margin: "14px 20px 0",
+        background: GOLD_DIM,
+        border: `1px solid ${GOLD}`,
+        borderRadius: 12,
+        padding: "12px 14px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      <AlertTriangle size={18} color={GOLD} style={{ flexShrink: 0 }} />
+      <div style={{ flex: 1, fontSize: 13, color: TEXT, lineHeight: 1.4 }}>Matagal na hindi na-backup. I-save ang data bago mawala ang telepono.</div>
+      <button onClick={onBackup} style={{ background: GOLD, color: "#141414", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 13, fontFamily: SERIF, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+        Backup now
+      </button>
+      <button onClick={onDismiss} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 2 }}>
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+// ---------- bottom nav ----------
+function BottomNav({ tab, setTab }) {
+  const items = [
+    { id: "sell", label: "Sell", icon: Receipt },
+    { id: "stock", label: "Stock", icon: Package },
+    { id: "utang", label: "Utang", icon: Users },
+    { id: "reports", label: "Reports", icon: BarChart3 },
+  ];
+  return (
+    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", borderTop: `1px solid ${BORDER}`, background: BG }}>
+      {items.map(({ id, label, icon: Icon }) => {
+        const active = tab === id;
+        return (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            style={{ flex: 1, background: "transparent", border: "none", padding: "10px 0 14px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: active ? GOLD : MUTED, cursor: "pointer", fontFamily: SERIF }}
+          >
+            <Icon size={20} strokeWidth={1.8} />
+            <span style={{ fontSize: 13 }}>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- empty state ----------
+function EmptyState({ icon: Icon, title, subtitle }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "90px 40px", color: MUTED }}>
+      <div style={{ width: 64, height: 64, borderRadius: "50%", background: CARD, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18 }}>
+        <Icon size={26} strokeWidth={1.5} color={MUTED} />
+      </div>
+      <div style={{ fontSize: 18, color: TEXT, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 14 }}>{subtitle}</div>
+    </div>
+  );
+}
+
+// ---------- input helper ----------
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 14, color: MUTED, marginBottom: 8 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  background: CARD,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 10,
+  padding: "14px 16px",
+  color: TEXT,
+  fontSize: 16,
+  fontFamily: SERIF,
+  outline: "none",
+};
+
+function CategoryHeader({ cat }) {
+  return <div style={{ fontSize: 13, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "14px 4px 6px" }}>{cat}</div>;
+}
+
+function StockBadge({ p }) {
+  if (isOut(p)) return <span style={{ color: DANGER, fontSize: 13 }}>out of stock</span>;
+  if (isLow(p)) return <span style={{ color: GOLD, fontSize: 13 }}>low stock &middot; {fmtQty(p.stock, p.soldBy)} left</span>;
+  return <span style={{ color: MUTED, fontSize: 13 }}>{fmtQty(p.stock, p.soldBy)} left</span>;
+}
+
+// ---------- STOCK TAB ----------
+function StockTab({ products, onAdd, onEdit, onRestock, onDelivery, onHistory }) {
+  const grouped = groupByCategory(products);
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px 6px" }}>
+        <div style={{ color: MUTED, fontSize: 15 }}>{products.length} product(s)</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onHistory}
+            aria-label="Delivery history"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", background: CARD, border: `1px solid ${BORDER}`, color: TEXT, borderRadius: 10, width: 40, padding: "10px 0", cursor: "pointer" }}
+          >
+            <History size={16} />
+          </button>
+          {products.length > 0 && (
+            <button
+              onClick={onDelivery}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: CARD, border: `1px solid ${BORDER}`, color: TEXT, borderRadius: 10, padding: "10px 14px", fontSize: 15, fontFamily: SERIF, cursor: "pointer" }}
+            >
+              <Truck size={16} /> Delivery
+            </button>
+          )}
+          <button
+            onClick={onAdd}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: GOLD, color: "#141414", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 15, fontFamily: SERIF, fontWeight: 600, cursor: "pointer" }}
+          >
+            <Plus size={16} strokeWidth={2.5} /> Add
+          </button>
+        </div>
+      </div>
+
+      {products.length === 0 ? (
+        <EmptyState icon={Package} title="No products yet" subtitle='Tap "Add" to create your first product.' />
+      ) : (
+        <div style={{ padding: "0 20px 10px" }}>
+          {grouped.map(({ cat, items }) => (
+            <div key={cat}>
+              {grouped.length > 1 && <CategoryHeader cat={cat} />}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                {items.map((p) => (
+                  <div key={p.id} style={{ background: CARD, border: `1px solid ${isOut(p) ? DANGER : isLow(p) ? GOLD : BORDER}`, borderRadius: 12, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <button onClick={() => onEdit(p)} style={{ textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: TEXT, fontFamily: SERIF, flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 16 }}>{p.name}</div>
+                      <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
+                        {peso(p.price)} {p.soldBy === "kg" ? "/ kg" : "/ pc"} &middot; <StockBadge p={p} />
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => onRestock(p)}
+                      style={{ background: CARD2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 10px", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontFamily: SERIF, flexShrink: 0, marginLeft: 8 }}
+                    >
+                      <Plus size={13} /> Stock
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- RESTOCK SHEET ----------
+function RestockSheet({ product, onClose, onConfirm }) {
+  const step = product.soldBy === "kg" ? 0.5 : 1;
+  const [qty, setQty] = useState(step);
+  return (
+    <Sheet onClose={onClose} title={`Restock: ${product.name}`}>
+      <div style={{ color: MUTED, fontSize: 14, marginBottom: 18 }}>Currently {fmtQty(product.stock, product.soldBy)} in stock.</div>
+      <Field label={`Add quantity${product.soldBy === "kg" ? " (kg)" : ""}`}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <RoundBtn onClick={() => setQty((q) => Math.max(step, Number((q - step).toFixed(2))))}>
+            <Minus size={16} />
+          </RoundBtn>
+          <input style={{ ...inputStyle, textAlign: "center", flex: 1 }} type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
+          <RoundBtn onClick={() => setQty((q) => Number((q + step).toFixed(2)))}>
+            <Plus size={16} />
+          </RoundBtn>
+        </div>
+      </Field>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: `1px solid ${BORDER}`, marginBottom: 18 }}>
+        <span style={{ color: MUTED, fontSize: 14 }}>New stock total</span>
+        <span style={{ color: GOLD, fontSize: 18 }}>{fmtQty(Number(product.stock) + Number(qty || 0), product.soldBy)}</span>
+      </div>
+      <button
+        disabled={!qty || qty <= 0}
+        onClick={() => onConfirm(Number(qty))}
+        style={{ width: "100%", background: qty > 0 ? GOLD : CARD2, color: qty > 0 ? "#141414" : MUTED, border: "none", borderRadius: 10, padding: "16px", fontSize: 16, fontFamily: SERIF, fontWeight: 600, cursor: qty > 0 ? "pointer" : "default" }}
+      >
+        Add to stock
+      </button>
+    </Sheet>
+  );
+}
+
+// ---------- DELIVERY SHEET (bulk price + stock update) ----------
+function DeliverySheet({ products, onClose, onApply }) {
+  const [q, setQ] = useState("");
+  const [edits, setEdits] = useState({}); // { [productId]: { price, cost, addQty } }
+
+  const filtered = products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
+
+  const setField = (id, field, value) => {
+    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  };
+
+  const isTouched = (e) => e && ((e.price ?? "") !== "" || (e.cost ?? "") !== "" || (e.addQty ?? "") !== "");
+  const changedCount = Object.values(edits).filter(isTouched).length;
+
+  return (
+    <Sheet onClose={onClose} title="Delivery / restock">
+      <div style={{ color: MUTED, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+        Update price, cost, and add stock for as many products as you need at once. Leave a field blank to leave it unchanged.
+      </div>
+
+      <div style={{ position: "relative", marginBottom: 14 }}>
+        <Search size={16} color={MUTED} style={{ position: "absolute", left: 14, top: 15 }} />
+        <input style={{ ...inputStyle, paddingLeft: 38 }} placeholder="Search products..." value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+        {filtered.map((p) => {
+          const e = edits[p.id] || {};
+          const touched = isTouched(e);
+          return (
+            <div key={p.id} style={{ background: CARD, border: `1px solid ${touched ? GOLD : BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 15 }}>{p.name}</div>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 2, marginBottom: 10 }}>
+                Ngayon: {peso(p.price)} {p.soldBy === "kg" ? "/ kg" : "/ pc"}
+                {p.cost ? ` \u00b7 cost ${peso(p.cost)}` : ""} &middot; {fmtQty(p.stock, p.soldBy)}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  style={{ ...inputStyle, padding: "10px 10px", fontSize: 13 }}
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="Bagong presyo"
+                  value={e.price ?? ""}
+                  onChange={(ev) => setField(p.id, "price", ev.target.value)}
+                />
+                <input
+                  style={{ ...inputStyle, padding: "10px 10px", fontSize: 13 }}
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="Bagong cost"
+                  value={e.cost ?? ""}
+                  onChange={(ev) => setField(p.id, "cost", ev.target.value)}
+                />
+                <input
+                  style={{ ...inputStyle, padding: "10px 10px", fontSize: 13 }}
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={`+ stock`}
+                  value={e.addQty ?? ""}
+                  onChange={(ev) => setField(p.id, "addQty", ev.target.value)}
+                />
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div style={{ color: MUTED, fontSize: 14, textAlign: "center", padding: "30px 0" }}>No matches.</div>}
+      </div>
+
+      <button
+        disabled={changedCount === 0}
+        onClick={() => {
+          onApply(edits);
+          onClose();
+        }}
+        style={{
+          width: "100%",
+          background: changedCount > 0 ? GOLD : CARD2,
+          color: changedCount > 0 ? "#141414" : MUTED,
+          border: "none",
+          borderRadius: 10,
+          padding: "16px",
+          fontSize: 16,
+          fontFamily: SERIF,
+          fontWeight: 600,
+          cursor: changedCount > 0 ? "pointer" : "default",
+        }}
+      >
+        {changedCount > 0 ? `Apply to ${changedCount} product${changedCount > 1 ? "s" : ""}` : "Apply changes"}
+      </button>
+    </Sheet>
+  );
+}
+
+// ---------- DELIVERY HISTORY ----------
+function DeliveryHistorySheet({ deliveries, onClose }) {
+  const [expanded, setExpanded] = useState(null);
+  const sorted = deliveries.slice().reverse();
+
+  return (
+    <Sheet onClose={onClose} title="Delivery history">
+      {sorted.length === 0 ? (
+        <EmptyState icon={Truck} title="No deliveries yet" subtitle="Deliveries you apply from Stock will show up here." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {sorted.map((d) => {
+            const isOpen = expanded === d.id;
+            return (
+              <div key={d.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : d.id)}
+                  style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", color: TEXT, fontFamily: SERIF }}
+                >
+                  <div>
+                    <div style={{ fontSize: 15 }}>{fmtDate(d.timestamp)}</div>
+                    <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>
+                      {d.items.length} product{d.items.length > 1 ? "s" : ""} updated
+                    </div>
+                  </div>
+                  {isOpen ? <ChevronDown size={16} color={MUTED} /> : <ChevronRight size={16} color={MUTED} />}
+                </button>
+
+                {isOpen && (
+                  <div style={{ borderTop: `1px solid ${BORDER}`, padding: "10px 16px 14px" }}>
+                    {d.items.map((it, i) => (
+                      <div key={it.productId + i} style={{ padding: "10px 0", borderBottom: i < d.items.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                        <div style={{ fontSize: 14 }}>{it.name}</div>
+                        <div style={{ fontSize: 13, color: MUTED, marginTop: 3, display: "flex", flexWrap: "wrap", gap: 10 }}>
+                          {it.oldPrice !== it.newPrice && (
+                            <span>
+                              Presyo: {peso(it.oldPrice)} &rarr; <span style={{ color: GOLD }}>{peso(it.newPrice)}</span>
+                            </span>
+                          )}
+                          {it.oldCost !== it.newCost && (
+                            <span>
+                              Cost: {peso(it.oldCost)} &rarr; <span style={{ color: GOLD }}>{peso(it.newCost)}</span>
+                            </span>
+                          )}
+                          {it.addedQty > 0 && <span style={{ color: GOLD }}>+{fmtQty(it.addedQty, it.soldBy)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+// ---------- PRODUCT FORM (add / edit) ----------
+function ProductForm({ initial, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [soldBy, setSoldBy] = useState(initial?.soldBy || "piece");
+  const [price, setPrice] = useState(initial?.price ?? "");
+  const [cost, setCost] = useState(initial?.cost ?? "");
+  const [stock, setStock] = useState(initial?.stock ?? "");
+  const [category, setCategory] = useState(initial?.category || "");
+  const [threshold, setThreshold] = useState(initial?.lowStockThreshold ?? "");
+
+  const valid = name.trim().length > 0 && Number(price) > 0;
+  const catListId = "cat-suggestions";
+
+  return (
+    <Sheet onClose={onClose} title={initial ? "Edit product" : "Add product"}>
+      <Field label="Product name">
+        <input style={inputStyle} placeholder='e.g., "Coke 1.5L"' value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+
+      <Field label="Sold by">
+        <div style={{ display: "flex", gap: 12 }}>
+          {[
+            { id: "piece", label: "Piece", sub: "count items" },
+            { id: "kg", label: "Kilogram", sub: "weigh items" },
+          ].map((opt) => {
+            const active = soldBy === opt.id;
+            return (
+              <button key={opt.id} onClick={() => setSoldBy(opt.id)} style={{ flex: 1, textAlign: "left", background: active ? GOLD_DIM : CARD, border: `1px solid ${active ? GOLD : BORDER}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", fontFamily: SERIF }}>
+                <div style={{ color: active ? GOLD : TEXT, fontSize: 16 }}>{opt.label}</div>
+                <div style={{ color: MUTED, fontSize: 13, marginTop: 2 }}>{opt.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Price (\u20B1)">
+            <input style={inputStyle} type="number" inputMode="decimal" placeholder="0.00" value={price} onChange={(e) => setPrice(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Cost (\u20B1, opt)">
+            <input style={inputStyle} type="number" inputMode="decimal" placeholder="0.00" value={cost} onChange={(e) => setCost(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+
+      <Field label={`Stock quantity${soldBy === "kg" ? " (kg)" : ""}`}>
+        <input style={inputStyle} type="number" inputMode="decimal" step={soldBy === "kg" ? "0.01" : "1"} placeholder="0" value={stock} onChange={(e) => setStock(e.target.value)} />
+      </Field>
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Category (optional)">
+            <input style={inputStyle} list={catListId} placeholder="e.g., Inumin" value={category} onChange={(e) => setCategory(e.target.value)} />
+            <datalist id={catListId}>
+              {CATEGORY_SUGGESTIONS.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label={`Low stock at (opt, default ${DEFAULT_THRESHOLD[soldBy]})`}>
+            <input style={inputStyle} type="number" inputMode="decimal" placeholder={String(DEFAULT_THRESHOLD[soldBy])} value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+
+      <button
+        disabled={!valid}
+        onClick={() =>
+          onSave({
+            id: initial?.id,
+            name: name.trim(),
+            soldBy,
+            price: Number(price) || 0,
+            cost: Number(cost) || 0,
+            stock: Number(stock) || 0,
+            category: category.trim(),
+            lowStockThreshold: threshold === "" ? null : Number(threshold),
+          })
+        }
+        style={{ width: "100%", background: valid ? GOLD : CARD2, color: valid ? "#141414" : MUTED, border: "none", borderRadius: 10, padding: "16px", fontSize: 16, fontFamily: SERIF, fontWeight: 600, cursor: valid ? "pointer" : "default", marginTop: 4 }}
+      >
+        {initial ? "Save changes" : "Add product"}
+      </button>
+
+      {initial && (
+        <button onClick={onDelete} style={{ width: "100%", background: "transparent", color: DANGER, border: `1px solid ${DANGER}`, borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: SERIF, cursor: "pointer", marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <Trash2 size={16} /> Delete product
+        </button>
+      )}
+    </Sheet>
+  );
+}
+
+// ---------- SELL TAB ----------
+function SellTab({ products, cart, onAddToCart }) {
+  const [q, setQ] = useState("");
+  const filtered = products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
+  const grouped = groupByCategory(filtered);
+
+  return (
+    <div>
+      <div style={{ padding: "18px 20px 10px" }}>
+        <div style={{ position: "relative" }}>
+          <Search size={16} color={MUTED} style={{ position: "absolute", left: 14, top: 15 }} />
+          <input style={{ ...inputStyle, paddingLeft: 38 }} placeholder="Search products..." value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+      </div>
+
+      {products.length === 0 ? (
+        <EmptyState icon={Receipt} title="No products yet" subtitle="Add products in the Stock tab first." />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={Search} title="No matches" subtitle="Try a different search term." />
+      ) : (
+        <div style={{ padding: "0 20px 90px" }}>
+          {grouped.map(({ cat, items }) => (
+            <div key={cat}>
+              {grouped.length > 1 && <CategoryHeader cat={cat} />}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                {items.map((p) => {
+                  const out = isOut(p);
+                  const inCart = cart.find((c) => c.productId === p.id);
+                  const step = p.soldBy === "kg" ? 0.1 : 1;
+                  return (
+                    <div
+                      key={p.id}
+                      style={{ background: CARD, border: `1px solid ${out ? BORDER : isLow(p) ? GOLD : inCart ? GOLD : BORDER}`, borderRadius: 12, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", opacity: out ? 0.5 : 1 }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 16 }}>{p.name}</div>
+                        <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
+                          {peso(p.price)} {p.soldBy === "kg" ? "/ kg" : "/ pc"} &middot; <StockBadge p={p} />
+                        </div>
+                      </div>
+                      {out ? (
+                        <div style={{ color: MUTED, fontSize: 13, flexShrink: 0, marginLeft: 8 }}>out</div>
+                      ) : inCart ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                          <RoundBtn onClick={() => onAddToCart(p, -step)}>
+                            <Minus size={14} />
+                          </RoundBtn>
+                          <span style={{ fontSize: 15, minWidth: 40, textAlign: "center" }}>{fmtQty(inCart.qty, p.soldBy)}</span>
+                          <RoundBtn onClick={() => onAddToCart(p, step)}>
+                            <Plus size={14} />
+                          </RoundBtn>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => onAddToCart(p, step)}
+                          style={{ background: GOLD_DIM, border: `1px solid ${GOLD}`, color: GOLD, borderRadius: "50%", width: 34, height: 34, fontSize: 20, fontWeight: 300, cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex", alignItems: "center", justifyContent: "center" }}
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CartBar({ count, total, onCheckout }) {
+  return (
+    <button
+      onClick={onCheckout}
+      style={{
+        position: "absolute",
+        bottom: 70,
+        left: 16,
+        right: 16,
+        background: GOLD,
+        color: "#141414",
+        border: "none",
+        borderRadius: 14,
+        padding: "14px 18px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        fontFamily: SERIF,
+        fontSize: 15,
+        fontWeight: 600,
+        cursor: "pointer",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+        zIndex: 10,
+      }}
+    >
+      <span>
+        {count} item{count > 1 ? "s" : ""} &middot; {peso(total)}
+      </span>
+      <span>Checkout &rarr;</span>
+    </button>
+  );
+}
+
+// ---------- SELL SHEET ----------
+function CheckoutSheet({ cart, products, onClose, onUpdateQty, onRemove, onConfirm }) {
+  const [mode, setMode] = useState("paid"); // paid | utang
+  const [customer, setCustomer] = useState("");
+  const [received, setReceived] = useState("");
+
+  const total = cart.reduce((s, c) => s + c.qty * c.price, 0);
+  const valid = cart.length > 0 && (mode === "paid" || customer.trim().length > 0);
+  const receivedNum = Number(received) || 0;
+  const change = receivedNum - total;
+
+  return (
+    <Sheet onClose={onClose} title={`Checkout (${cart.length} item${cart.length > 1 ? "s" : ""})`}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+        {cart.map((c) => {
+          const product = products.find((p) => p.id === c.productId);
+          const stock = product ? Number(product.stock) : c.qty;
+          const step = c.soldBy === "kg" ? 0.1 : 1;
+          return (
+            <div key={c.productId} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 15 }}>{c.name}</div>
+                <button onClick={() => onRemove(c.productId)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer" }}>
+                  <X size={16} />
+                </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <RoundBtn onClick={() => onUpdateQty(c.productId, Number((c.qty - step).toFixed(2)), stock)}>
+                    <Minus size={14} />
+                  </RoundBtn>
+                  <span style={{ fontSize: 15, minWidth: 46, textAlign: "center" }}>{fmtQty(c.qty, c.soldBy)}</span>
+                  <RoundBtn onClick={() => onUpdateQty(c.productId, Number((c.qty + step).toFixed(2)), stock)}>
+                    <Plus size={14} />
+                  </RoundBtn>
+                </div>
+                <div style={{ color: GOLD, fontSize: 15 }}>{peso(c.qty * c.price)}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Field label="Payment">
+        <div style={{ display: "flex", gap: 12 }}>
+          {[
+            { id: "paid", label: "Bayad na" },
+            { id: "utang", label: "Utang" },
+          ].map((opt) => {
+            const active = mode === opt.id;
+            return (
+              <button key={opt.id} onClick={() => setMode(opt.id)} style={{ flex: 1, background: active ? GOLD_DIM : CARD, border: `1px solid ${active ? GOLD : BORDER}`, borderRadius: 10, padding: "14px", color: active ? GOLD : TEXT, fontFamily: SERIF, fontSize: 15, cursor: "pointer" }}>
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      {mode === "utang" && (
+        <Field label="Customer name">
+          <input style={inputStyle} placeholder="e.g., Aling Nena" value={customer} onChange={(e) => setCustomer(e.target.value)} />
+        </Field>
+      )}
+
+      {mode === "paid" && (
+        <Field label="Bayad ng customer (opsyonal)">
+          <input
+            style={inputStyle}
+            type="number"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={received}
+            onChange={(e) => setReceived(e.target.value)}
+          />
+          {received !== "" && (
+            <div
+              style={{
+                marginTop: 10,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: change >= 0 ? GOLD_DIM : DANGER_DIM,
+                border: `1px solid ${change >= 0 ? GOLD : DANGER}`,
+                borderRadius: 10,
+                padding: "12px 14px",
+              }}
+            >
+              <span style={{ fontSize: 14, color: change >= 0 ? GOLD : DANGER }}>{change >= 0 ? "Sukli (change)" : "Kulang (short)"}</span>
+              <span style={{ fontSize: 18, color: change >= 0 ? GOLD : DANGER, fontWeight: 600 }}>{peso(Math.abs(change))}</span>
+            </div>
+          )}
+        </Field>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderTop: `1px solid ${BORDER}`, marginBottom: 18 }}>
+        <span style={{ color: MUTED, fontSize: 15 }}>Total</span>
+        <span style={{ color: GOLD, fontSize: 24 }}>{peso(total)}</span>
+      </div>
+
+      <button
+        disabled={!valid}
+        onClick={() => onConfirm({ customer: customer.trim(), isPaid: mode === "paid" })}
+        style={{ width: "100%", background: valid ? GOLD : CARD2, color: valid ? "#141414" : MUTED, border: "none", borderRadius: 10, padding: "16px", fontSize: 16, fontFamily: SERIF, fontWeight: 600, cursor: valid ? "pointer" : "default" }}
+      >
+        Confirm sale
+      </button>
+    </Sheet>
+  );
+}
+
+function RoundBtn({ onClick, children }) {
+  return (
+    <button onClick={onClick} style={{ width: 42, height: 42, borderRadius: "50%", background: CARD2, border: `1px solid ${BORDER}`, color: TEXT, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+      {children}
+    </button>
+  );
+}
+
+// ---------- UTANG TAB ----------
+function UtangTab({ sales, customers, expandedCustomer, setExpandedCustomer, applyPayment, onEditInfo }) {
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("unpaid");
+  const [payFor, setPayFor] = useState(null);
+
+  const list = useMemo(() => {
+    const map = {};
+    sales
+      .filter((s) => s.customer)
+      .forEach((s) => {
+        if (!map[s.customer]) map[s.customer] = { name: s.customer, items: [], owed: 0, settled: 0 };
+        map[s.customer].items.push(s);
+        map[s.customer].owed += remainingOf(s);
+        map[s.customer].settled += Number(s.paidAmount || 0);
+      });
+    Object.values(map).forEach((c) => {
+      c.items.sort((a, b) => a.timestamp - b.timestamp);
+      c.oldestDate = c.items[0]?.timestamp;
+      c.info = customers[c.name] || {};
+    });
+    return Object.values(map).sort((a, b) => b.owed - a.owed || a.oldestDate - b.oldestDate);
+  }, [sales, customers]);
+
+  const filtered = list
+    .filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
+    .filter((c) => {
+      if (filter === "unpaid") return c.owed > 0.001;
+      if (filter === "paid") return c.owed <= 0.001 && c.settled > 0;
+      return true;
+    });
+
+  const today = startOfDay(Date.now());
+
+  return (
+    <div>
+      <div style={{ padding: "18px 20px 10px" }}>
+        <div style={{ position: "relative", marginBottom: 14 }}>
+          <Search size={16} color={MUTED} style={{ position: "absolute", left: 14, top: 15 }} />
+          <input style={{ ...inputStyle, paddingLeft: 38 }} placeholder="Hanapin ang pangalan..." value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          {[
+            { id: "unpaid", label: "May utang" },
+            { id: "paid", label: "Bayad na" },
+            { id: "all", label: "Lahat" },
+          ].map((opt) => {
+            const active = filter === opt.id;
+            return (
+              <button key={opt.id} onClick={() => setFilter(opt.id)} style={{ background: active ? GOLD : CARD, color: active ? "#141414" : TEXT, border: `1px solid ${active ? GOLD : BORDER}`, borderRadius: 20, padding: "8px 16px", fontSize: 14, fontFamily: SERIF, cursor: "pointer" }}>
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState icon={Users} title={filter === "unpaid" ? "Walang utang" : "Walang makita"} subtitle={filter === "unpaid" ? "Wala pang hindi pa nababayaran." : "Try a different filter or search."} />
+      ) : (
+        <div style={{ padding: "6px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map((c) => {
+            const expanded = expandedCustomer === c.name;
+            const overLimit = c.info.limit && Number(c.info.limit) > 0 && c.owed > Number(c.info.limit);
+            const dueTs = c.info.dueDate ? new Date(c.info.dueDate).getTime() : null;
+            const overdue = dueTs && dueTs < today && c.owed > 0.001;
+
+            return (
+              <div key={c.name} style={{ background: CARD, border: `1px solid ${overLimit ? DANGER : BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                <button
+                  onClick={() => setExpandedCustomer(expanded ? null : c.name)}
+                  style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", color: TEXT, fontFamily: SERIF }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 16 }}>{c.name}</div>
+                    <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
+                      Since {fmtDate(c.oldestDate)} &middot; {c.items.length} item{c.items.length > 1 ? "s" : ""}
+                    </div>
+                    {(overLimit || overdue) && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                        {overLimit && <span style={{ fontSize: 13, color: DANGER, border: `1px solid ${DANGER}`, borderRadius: 20, padding: "2px 8px" }}>lampas sa limit</span>}
+                        {overdue && <span style={{ fontSize: 13, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "2px 8px" }}>lampas na sa due date</span>}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 8 }}>
+                    <div style={{ color: c.owed > 0.001 ? DANGER : GOLD, fontSize: 17 }}>{c.owed > 0.001 ? peso(c.owed) : "Bayad na"}</div>
+                    {expanded ? <ChevronDown size={16} color={MUTED} /> : <ChevronRight size={16} color={MUTED} />}
+                  </div>
+                </button>
+
+                {expanded && (
+                  <div style={{ borderTop: `1px solid ${BORDER}`, padding: "10px 16px 16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      {c.info.phone ? <div style={{ fontSize: 13, color: MUTED }}>{c.info.phone}</div> : <div />}
+                      <button
+                        onClick={() => onEditInfo(c.name)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", color: MUTED, fontFamily: SERIF, fontSize: 13, cursor: "pointer" }}
+                      >
+                        <Pencil size={12} /> Edit info
+                      </button>
+                    </div>
+
+                    {c.items
+                      .slice()
+                      .reverse()
+                      .map((it) => {
+                        const rem = remainingOf(it);
+                        return (
+                          <div key={it.id} style={{ padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                              <span>
+                                {it.name} &middot; {fmtQty(it.qty, it.soldBy)}
+                              </span>
+                              <span style={{ color: rem > 0.001 ? DANGER : GOLD }}>{peso(it.total)}</span>
+                            </div>
+                            <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>Nag-utang: {fmtDate(it.timestamp)}</div>
+                            {rem > 0.001 && Number(it.paidAmount || 0) > 0 && (
+                              <div style={{ fontSize: 13, color: GOLD, marginTop: 2 }}>
+                                Nabayaran na: {peso(it.paidAmount)} &middot; Natitira: {peso(rem)}
+                              </div>
+                            )}
+                            {it.payments && it.payments.length > 0 && (
+                              <div style={{ marginTop: 4 }}>
+                                {it.payments.map((pay) => (
+                                  <div key={pay.id} style={{ fontSize: 13, color: MUTED }}>
+                                    Bayad {peso(pay.amount)} &middot; {fmtDate(pay.timestamp)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                    {c.owed > 0.001 && (
+                      <div style={{ marginTop: 12 }}>
+                        {payFor === c.name ? (
+                          <PayForm max={c.owed} onCancel={() => setPayFor(null)} onSubmit={(amt) => { applyPayment(c.name, amt); setPayFor(null); }} />
+                        ) : (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => setPayFor(c.name)} style={{ flex: 1, background: CARD2, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px", fontFamily: SERIF, fontSize: 14, cursor: "pointer" }}>
+                              Magbayad ng konti
+                            </button>
+                            <button
+                              onClick={() => applyPayment(c.name, c.owed)}
+                              style={{ flex: 1, background: GOLD, color: "#141414", border: "none", borderRadius: 8, padding: "10px", fontFamily: SERIF, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                            >
+                              <Check size={15} /> Bayad na lahat
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PayForm({ max, onCancel, onSubmit }) {
+  const [amt, setAmt] = useState("");
+  const num = Math.min(Number(amt) || 0, max);
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <input style={{ ...inputStyle, flex: 1 }} type="number" inputMode="decimal" placeholder={`hanggang ${peso(max)}`} value={amt} onChange={(e) => setAmt(e.target.value)} autoFocus />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={onCancel} style={{ flex: 1, background: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px", fontFamily: SERIF, fontSize: 14, cursor: "pointer" }}>
+          Kanselahin
+        </button>
+        <button disabled={num <= 0} onClick={() => onSubmit(num)} style={{ flex: 1, background: num > 0 ? GOLD : CARD2, color: num > 0 ? "#141414" : MUTED, border: "none", borderRadius: 8, padding: "10px", fontFamily: SERIF, fontSize: 14, fontWeight: 600, cursor: num > 0 ? "pointer" : "default" }}>
+          Bayad {num > 0 ? peso(num) : ""}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- CUSTOMER INFO SHEET ----------
+function CustomerInfoSheet({ name, info, onClose, onSave }) {
+  const [phone, setPhone] = useState(info.phone || "");
+  const [dueDate, setDueDate] = useState(info.dueDate || "");
+  const [note, setNote] = useState(info.note || "");
+  const [limit, setLimit] = useState(info.limit ?? "");
+
+  return (
+    <Sheet onClose={onClose} title={name}>
+      <Field label="Contact number (optional)">
+        <input style={inputStyle} type="tel" placeholder="09xx xxx xxxx" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      </Field>
+      <Field label="Due date / paalala (optional)">
+        <input style={inputStyle} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      </Field>
+      <Field label="Utang limit, \u20B1 (optional)">
+        <input style={inputStyle} type="number" inputMode="decimal" placeholder="e.g., 500" value={limit} onChange={(e) => setLimit(e.target.value)} />
+      </Field>
+      <Field label="Note (optional)">
+        <input style={inputStyle} placeholder="e.g., kapitbahay, tita ni Jun" value={note} onChange={(e) => setNote(e.target.value)} />
+      </Field>
+      <button
+        onClick={() => onSave({ phone: phone.trim(), dueDate, note: note.trim(), limit: limit === "" ? null : Number(limit) })}
+        style={{ width: "100%", background: GOLD, color: "#141414", border: "none", borderRadius: 10, padding: "16px", fontSize: 16, fontFamily: SERIF, fontWeight: 600, cursor: "pointer" }}
+      >
+        Save info
+      </button>
+    </Sheet>
+  );
+}
+
+// ---------- REPORTS TAB ----------
+function ReportsTab({ sales, totalStockPieces, totalStockKg, onUndoLast, onOpenClosing, onOpenCashDrawer }) {
+  const [range, setRange] = useState("today");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [confirmUndo, setConfirmUndo] = useState(false);
+
+  const scopedSales = sales.filter((s) => inRange(s.timestamp, range, customStart, customEnd));
+
+  let revenue = 0;
+  let profit = 0;
+  sales.forEach((s) => {
+    const rate = marginRateOf(s);
+    (s.payments || []).forEach((p) => {
+      if (inRange(p.timestamp, range, customStart, customEnd)) {
+        revenue += p.amount;
+        profit += p.amount * rate;
+      }
+    });
+  });
+
+  const productsSold = scopedSales.reduce((s, x) => s + Number(x.qty), 0);
+
+  const bestSellers = useMemo(() => {
+    const map = {};
+    scopedSales.forEach((s) => {
+      if (!map[s.productId]) map[s.productId] = { name: s.name, qty: 0, total: 0, soldBy: s.soldBy };
+      map[s.productId].qty += Number(s.qty);
+      map[s.productId].total += Number(s.total);
+    });
+    return Object.values(map)
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5);
+  }, [scopedSales]);
+
+  const lastSale = sales.length > 0 ? sales[sales.length - 1] : null;
+  const lastBatch = lastSale ? (lastSale.batchId ? sales.filter((s) => s.batchId === lastSale.batchId) : [lastSale]) : [];
+  const canUndo = lastBatch.length > 0 && lastBatch.every((s) => (s.customer ? (s.payments || []).length === 0 : true));
+
+  return (
+    <div style={{ padding: "18px 20px" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
+        {[
+          { id: "today", label: "Today" },
+          { id: "week", label: "This week" },
+          { id: "month", label: "This month" },
+          { id: "all", label: "All time" },
+          { id: "custom", label: "Custom" },
+        ].map((opt) => {
+          const active = range === opt.id;
+          return (
+            <button key={opt.id} onClick={() => setRange(opt.id)} style={{ background: active ? GOLD : CARD, color: active ? "#141414" : TEXT, border: `1px solid ${active ? GOLD : BORDER}`, borderRadius: 20, padding: "8px 16px", fontSize: 13, fontFamily: SERIF, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {range === "custom" && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <input style={{ ...inputStyle, fontSize: 14 }} type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+          <input style={{ ...inputStyle, fontSize: 14 }} type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <StatCard label="Sales" value={scopedSales.length} />
+        <StatCard label="Products sold" value={Number(productsSold.toFixed(2))} />
+        <StatCard label="Revenue" value={peso(revenue)} gold />
+        <StatCard label="Profit" value={peso(profit)} gold />
+      </div>
+      <div style={{ fontSize: 13, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
+        Revenue at Profit ay batay lamang sa aktwal na nabayaran &mdash; hindi kasama ang hindi pa nababayarang utang.
+      </div>
+
+      <button
+        onClick={onOpenCashDrawer}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: GOLD_DIM, border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px", color: GOLD, fontFamily: SERIF, fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}
+      >
+        <Wallet size={17} /> Cash drawer
+      </button>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <button onClick={onOpenClosing} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px", color: TEXT, fontFamily: SERIF, fontSize: 14, cursor: "pointer" }}>
+          <ClipboardList size={16} /> Closing summary
+        </button>
+        {lastSale && (
+          <button
+            disabled={!canUndo}
+            onClick={() => {
+              if (!confirmUndo) {
+                setConfirmUndo(true);
+                return;
+              }
+              onUndoLast();
+              setConfirmUndo(false);
+            }}
+            title={!canUndo ? "Hindi na ma-undo dahil may bayad na" : ""}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: confirmUndo ? DANGER_DIM : CARD, border: `1px solid ${confirmUndo ? DANGER : BORDER}`, borderRadius: 10, padding: "12px", color: canUndo ? (confirmUndo ? DANGER : TEXT) : MUTED, fontFamily: SERIF, fontSize: 14, cursor: canUndo ? "pointer" : "default", opacity: canUndo ? 1 : 0.5 }}
+          >
+            <Undo2 size={16} /> {confirmUndo ? "Confirm undo" : lastBatch.length > 1 ? `Undo last checkout (${lastBatch.length})` : "Undo last sale"}
+          </button>
+        )}
+      </div>
+
+      {bestSellers.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, fontSize: 15, marginBottom: 10 }}>
+            <TrendingUp size={16} /> Best sellers
+          </div>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "6px 16px" }}>
+            {bestSellers.map((b, i) => (
+              <div key={b.name + i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i < bestSellers.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                <span style={{ fontSize: 14 }}>
+                  {i + 1}. {b.name}
+                </span>
+                <span style={{ fontSize: 14, color: MUTED }}>
+                  {fmtQty(b.qty, b.soldBy)} &middot; {peso(b.total)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px", marginBottom: 20 }}>
+        <Row label="Stock \u2014 pieces" value={`${totalStockPieces} pc`} />
+        <div style={{ height: 1, background: BORDER, margin: "10px 0" }} />
+        <Row label="Stock \u2014 by weight" value={`${totalStockKg.toFixed(2)} kg`} />
+      </div>
+
+      <div style={{ fontSize: 15, color: MUTED, marginBottom: 10 }}>Sales</div>
+
+      {scopedSales.length === 0 ? (
+        <EmptyState icon={Receipt} title="No sales yet" subtitle="Completed sales will show up here." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {scopedSales
+            .slice()
+            .reverse()
+            .map((s) => {
+              const rem = remainingOf(s);
+              return (
+                <div key={s.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15 }}>{s.name}</div>
+                    <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>
+                      {fmtQty(s.qty, s.soldBy)} &middot; {range !== "today" ? `${fmtDateShort(s.timestamp)}, ` : ""}
+                      {new Date(s.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                    {s.customer && <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{s.customer}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: GOLD, fontSize: 15 }}>{peso(s.total)}</div>
+                    {s.customer && <div style={{ fontSize: 13, color: rem > 0.001 ? DANGER : MUTED, marginTop: 2 }}>{rem > 0.001 ? `utang \u00b7 ${peso(rem)} natitira` : "bayad na"}</div>}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, gold }) {
+  return (
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px" }}>
+      <div style={{ color: MUTED, fontSize: 14, marginBottom: 6 }}>{label}</div>
+      <div style={{ color: gold ? GOLD : TEXT, fontSize: 24 }}>{value}</div>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span style={{ color: MUTED, fontSize: 15 }}>{label}</span>
+      <span style={{ fontSize: 17 }}>{value}</span>
+    </div>
+  );
+}
+
+// ---------- CLOSING SUMMARY ----------
+function ClosingSummarySheet({ sales, products, onClose }) {
+  const todaySales = sales.filter((s) => sameDay(s.timestamp));
+  let revenue = 0;
+  let profit = 0;
+  let utangGiven = 0;
+  let utangCollected = 0;
+  sales.forEach((s) => {
+    const rate = marginRateOf(s);
+    (s.payments || []).forEach((p) => {
+      if (sameDay(p.timestamp)) {
+        revenue += p.amount;
+        profit += p.amount * rate;
+        if (s.customer) utangCollected += p.amount;
+      }
+    });
+  });
+  todaySales.forEach((s) => {
+    if (s.customer) utangGiven += s.total;
+  });
+
+  const [copyLabel, setCopyLabel] = useState("Copy summary");
+  const text = [
+    `Counter \u2014 Closing Summary`,
+    new Date().toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+    ``,
+    `Sales: ${todaySales.length}`,
+    `Revenue collected: ${peso(revenue)}`,
+    `Profit: ${peso(profit)}`,
+    `New utang today: ${peso(utangGiven)}`,
+    `Utang payments collected: ${peso(utangCollected)}`,
+    ``,
+    products.length > 0 ? `Low / out of stock:` : `Stock: all okay`,
+    ...products.map((p) => `- ${p.name}: ${fmtQty(p.stock, p.soldBy)}${isOut(p) ? " (OUT)" : ""}`),
+  ].join("\n");
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyLabel("Copied!");
+    } catch (e) {
+      setCopyLabel("Couldn't copy");
+    }
+    setTimeout(() => setCopyLabel("Copy summary"), 2000);
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Closing summary">
+      <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px", marginBottom: 16 }}>
+        <Row label="Sales" value={todaySales.length} />
+        <Divider />
+        <Row label="Revenue collected" value={peso(revenue)} />
+        <Divider />
+        <Row label="Profit" value={peso(profit)} />
+        <Divider />
+        <Row label="New utang today" value={peso(utangGiven)} />
+        <Divider />
+        <Row label="Utang payments collected" value={peso(utangCollected)} />
+      </div>
+
+      {products.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ color: MUTED, fontSize: 14, marginBottom: 8 }}>Low / out of stock</div>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "4px 16px" }}>
+            {products.map((p, i) => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i < products.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                <span style={{ fontSize: 14 }}>{p.name}</span>
+                <span style={{ fontSize: 14, color: isOut(p) ? DANGER : GOLD }}>{fmtQty(p.stock, p.soldBy)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button onClick={copy} style={{ width: "100%", background: GOLD, color: "#141414", border: "none", borderRadius: 10, padding: "16px", fontSize: 16, fontFamily: SERIF, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <Copy size={16} /> {copyLabel}
+      </button>
+    </Sheet>
+  );
+}
+function Divider() {
+  return <div style={{ height: 1, background: BORDER, margin: "10px 0" }} />;
+}
+
+// ---------- CASH DRAWER ----------
+function CashDrawerSheet({ sales, cashLogs, cashSessions, onClose, onSetOpening, onSetClosing, onAddLog, onRemoveLog }) {
+  const session = cashSessions[todayKey()] || {};
+  const [openingInput, setOpeningInput] = useState(session.opening ?? "");
+  const [closingInput, setClosingInput] = useState(session.closing ?? "");
+  const [showAddLog, setShowAddLog] = useState(false);
+
+  const todayLogs = cashLogs.filter((l) => sameDay(l.timestamp));
+  const totalOut = todayLogs.reduce((s, l) => s + l.amount, 0);
+
+  let cashInToday = 0;
+  sales.forEach((s) => {
+    (s.payments || []).forEach((p) => {
+      if (sameDay(p.timestamp)) cashInToday += p.amount;
+    });
+  });
+
+  const hasOpening = session.opening !== undefined && session.opening !== null;
+  const expected = (hasOpening ? session.opening : 0) + cashInToday - totalOut;
+  const hasClosing = session.closing !== undefined && session.closing !== null;
+  const diff = hasClosing ? session.closing - expected : null;
+
+  return (
+    <Sheet onClose={onClose} title="Cash drawer">
+      <div style={{ color: MUTED, fontSize: 13, marginBottom: 18, lineHeight: 1.5 }}>
+        Bilangin ang pera sa register sa umaga at sa gabi para malaman kung tumpak, may sobra, o may kulang.
+      </div>
+
+      <Field label="Panimulang pera ngayong umaga (opening)">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            style={{ ...inputStyle, flex: 1 }}
+            type="number"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={openingInput}
+            onChange={(e) => setOpeningInput(e.target.value)}
+          />
+          <button
+            disabled={openingInput === ""}
+            onClick={() => onSetOpening(openingInput)}
+            style={{ background: openingInput !== "" ? GOLD : CARD2, color: openingInput !== "" ? "#141414" : MUTED, border: "none", borderRadius: 10, padding: "0 18px", fontFamily: SERIF, fontSize: 14, fontWeight: 600, cursor: openingInput !== "" ? "pointer" : "default" }}
+          >
+            Save
+          </button>
+        </div>
+        {hasOpening && <div style={{ fontSize: 13, color: GOLD, marginTop: 6 }}>Naka-save: {peso(session.opening)}</div>}
+      </Field>
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 14, color: MUTED }}>Cash na kinuha ngayon</div>
+          <button
+            onClick={() => setShowAddLog(true)}
+            style={{ display: "flex", alignItems: "center", gap: 4, background: CARD2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", color: TEXT, fontFamily: SERIF, fontSize: 13, cursor: "pointer" }}
+          >
+            <Plus size={13} /> Add
+          </button>
+        </div>
+
+        {showAddLog && (
+          <AddCashLogForm
+            onCancel={() => setShowAddLog(false)}
+            onSubmit={(amount, reason) => {
+              onAddLog(amount, reason);
+              setShowAddLog(false);
+            }}
+          />
+        )}
+
+        {todayLogs.length === 0 && !showAddLog ? (
+          <div style={{ color: MUTED, fontSize: 13, textAlign: "center", padding: "16px 0" }}>Wala pang nakuhang cash ngayon.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: showAddLog ? 10 : 0 }}>
+            {todayLogs
+              .slice()
+              .reverse()
+              .map((l) => (
+                <div key={l.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14 }}>{l.reason || "(walang detalye)"}</div>
+                    <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{fmtDate(l.timestamp)}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                    <span style={{ color: DANGER, fontSize: 14 }}>-{peso(l.amount)}</span>
+                    <button onClick={() => onRemoveLog(l.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer" }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+        {todayLogs.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 13, color: MUTED }}>
+            <span>Total na kinuha</span>
+            <span style={{ color: DANGER }}>-{peso(totalOut)}</span>
+          </div>
+        )}
+      </div>
+
+      <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px", marginBottom: 18 }}>
+        <Row label="Opening" value={peso(hasOpening ? session.opening : 0)} />
+        <Divider />
+        <Row label="+ Cash sales ngayon" value={peso(cashInToday)} />
+        <Divider />
+        <Row label="- Kinuhang cash" value={peso(totalOut)} />
+        <Divider />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 15 }}>Dapat nasa register ngayon</span>
+          <span style={{ fontSize: 19, color: GOLD }}>{peso(expected)}</span>
+        </div>
+      </div>
+
+      <Field label="Binilang na cash ngayong gabi (closing)">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            style={{ ...inputStyle, flex: 1 }}
+            type="number"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={closingInput}
+            onChange={(e) => setClosingInput(e.target.value)}
+          />
+          <button
+            disabled={closingInput === ""}
+            onClick={() => onSetClosing(closingInput)}
+            style={{ background: closingInput !== "" ? GOLD : CARD2, color: closingInput !== "" ? "#141414" : MUTED, border: "none", borderRadius: 10, padding: "0 18px", fontFamily: SERIF, fontSize: 14, fontWeight: 600, cursor: closingInput !== "" ? "pointer" : "default" }}
+          >
+            Save
+          </button>
+        </div>
+      </Field>
+
+      {hasClosing && (
+        <div
+          style={{
+            background: diff === 0 ? GOLD_DIM : diff > 0 ? GOLD_DIM : DANGER_DIM,
+            border: `1px solid ${diff === 0 ? GOLD : diff > 0 ? GOLD : DANGER}`,
+            borderRadius: 12,
+            padding: "16px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: 14, color: diff === 0 || diff > 0 ? GOLD : DANGER, marginBottom: 4 }}>
+            {diff === 0 ? "Tumpak! \u2705" : diff > 0 ? "May sobra" : "May kulang"}
+          </div>
+          <div style={{ fontSize: 24, color: diff === 0 || diff > 0 ? GOLD : DANGER }}>{peso(Math.abs(diff))}</div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+function AddCashLogForm({ onCancel, onSubmit }) {
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const valid = Number(amount) > 0;
+
+  return (
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+      <input
+        style={{ ...inputStyle, marginBottom: 8 }}
+        type="number"
+        inputMode="decimal"
+        placeholder="Halaga"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        autoFocus
+      />
+      <input
+        style={{ ...inputStyle, marginBottom: 10 }}
+        placeholder="Para saan? (hal. pambili ng yelo)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={onCancel} style={{ flex: 1, background: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px", fontFamily: SERIF, fontSize: 14, cursor: "pointer" }}>
+          Kanselahin
+        </button>
+        <button
+          disabled={!valid}
+          onClick={() => onSubmit(amount, reason)}
+          style={{ flex: 1, background: valid ? GOLD : CARD2, color: valid ? "#141414" : MUTED, border: "none", borderRadius: 8, padding: "10px", fontFamily: SERIF, fontSize: 14, fontWeight: 600, cursor: valid ? "pointer" : "default" }}
+        >
+          Idagdag
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- SETTINGS SHEET (export / import / security) ----------
+function SettingsSheet({ products, sales, customers, settings, initialMode, onClose, onImport, onMarkBackedUp, onSetPin, onRemovePin }) {
+  const [mode, setMode] = useState(initialMode || "export");
+  const [copyLabel, setCopyLabel] = useState("Copy code");
+  const [pasteText, setPasteText] = useState("");
+  const [error, setError] = useState("");
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+  const textareaRef = useRef(null);
+
+  const code = useMemo(() => JSON.stringify({ v: BACKUP_VERSION, exportedAt: Date.now(), products, sales, customers, settings: {} }), [products, sales, customers]);
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyLabel("Copied!");
+      onMarkBackedUp();
+    } catch (e) {
+      if (textareaRef.current) textareaRef.current.select();
+      setCopyLabel("Select & copy");
+    }
+    setTimeout(() => setCopyLabel("Copy code"), 2000);
+  };
+
+  const tryImport = () => {
+    setError("");
+    let parsed;
+    try {
+      parsed = JSON.parse(pasteText.trim());
+    } catch (e) {
+      setError("That doesn't look like a valid backup code. Paste the exact code from the other phone.");
+      return;
+    }
+    if (!parsed || (!Array.isArray(parsed.products) && !Array.isArray(parsed.sales))) {
+      setError("That code isn't a Counter backup.");
+      return;
+    }
+    if (!confirmOverwrite) {
+      setConfirmOverwrite(true);
+      return;
+    }
+    onImport(parsed);
+    onClose();
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Settings">
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[
+          { id: "export", label: "Export" },
+          { id: "import", label: "Import" },
+          { id: "security", label: "Security" },
+        ].map((opt) => {
+          const active = mode === opt.id;
+          return (
+            <button
+              key={opt.id}
+              onClick={() => { setMode(opt.id); setError(""); setConfirmOverwrite(false); }}
+              style={{ flex: 1, background: active ? GOLD_DIM : CARD, border: `1px solid ${active ? GOLD : BORDER}`, borderRadius: 10, padding: "10px 4px", color: active ? GOLD : TEXT, fontFamily: SERIF, fontSize: 13, cursor: "pointer" }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === "export" && (
+        <div>
+          <div style={{ color: MUTED, fontSize: 14, marginBottom: 12, lineHeight: 1.5 }}>
+            Copy this code and send it to the other phone. On that phone, open this same app, go to Settings &rarr; Import, and paste it in.
+          </div>
+          <textarea ref={textareaRef} readOnly value={code} onFocus={(e) => e.target.select()} style={{ ...inputStyle, height: 140, resize: "none", fontFamily: "monospace", fontSize: 13, marginBottom: 12 }} />
+          <button onClick={copyCode} style={{ width: "100%", background: GOLD, color: "#141414", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: SERIF, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <Copy size={16} /> {copyLabel}
+          </button>
+          {settings.lastBackupAt && <div style={{ color: MUTED, fontSize: 13, marginTop: 10, textAlign: "center" }}>Last backup: {fmtDate(settings.lastBackupAt)}</div>}
+        </div>
+      )}
+
+      {mode === "import" && (
+        <div>
+          <div style={{ color: MUTED, fontSize: 14, marginBottom: 12, lineHeight: 1.5 }}>
+            Paste the code from the other phone below. This replaces every product and sale on this device with what's in the code.
+          </div>
+          <textarea
+            value={pasteText}
+            onChange={(e) => { setPasteText(e.target.value); setConfirmOverwrite(false); setError(""); }}
+            placeholder="Paste the backup code here..."
+            style={{ ...inputStyle, height: 140, resize: "none", fontFamily: "monospace", fontSize: 13, marginBottom: 12 }}
+          />
+          {error && (
+            <div style={{ color: DANGER, fontSize: 13, marginBottom: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} /> {error}
+            </div>
+          )}
+          {confirmOverwrite && !error && (
+            <div style={{ color: GOLD, fontSize: 13, marginBottom: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} /> This will overwrite everything currently on this phone. Tap import again to confirm.
+            </div>
+          )}
+          <button
+            disabled={!pasteText.trim()}
+            onClick={tryImport}
+            style={{ width: "100%", background: pasteText.trim() ? GOLD : CARD2, color: pasteText.trim() ? "#141414" : MUTED, border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: SERIF, fontWeight: 600, cursor: pasteText.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+          >
+            <ClipboardPaste size={16} /> {confirmOverwrite ? "Confirm import" : "Import"}
+          </button>
+        </div>
+      )}
+
+      {mode === "security" && <SecurityPanel settings={settings} onSetPin={onSetPin} onRemovePin={onRemovePin} />}
+    </Sheet>
+  );
+}
+
+function SecurityPanel({ settings, onSetPin, onRemovePin }) {
+  const [editing, setEditing] = useState(!settings.pinEnabled);
+  const [p1, setP1] = useState("");
+  const [p2, setP2] = useState("");
+  const [err, setErr] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const submit = () => {
+    setErr("");
+    if (!/^\d{4,6}$/.test(p1)) {
+      setErr("Gumamit ng 4-6 digit na numero.");
+      return;
+    }
+    if (p1 !== p2) {
+      setErr("Hindi magkatugma ang PIN.");
+      return;
+    }
+    onSetPin(p1);
+    setEditing(false);
+    setP1("");
+    setP2("");
+  };
+
+  if (!editing) {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+          <Lock size={18} color={GOLD} />
+          <div style={{ flex: 1, fontSize: 14 }}>PIN lock is ON</div>
+        </div>
+        <button onClick={() => setEditing(true)} style={{ width: "100%", background: CARD2, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: SERIF, cursor: "pointer", marginBottom: 10 }}>
+          Baguhin ang PIN
+        </button>
+        <button
+          onClick={() => {
+            if (!confirmRemove) {
+              setConfirmRemove(true);
+              return;
+            }
+            onRemovePin();
+            setConfirmRemove(false);
+          }}
+          style={{ width: "100%", background: confirmRemove ? DANGER_DIM : "transparent", color: DANGER, border: `1px solid ${DANGER}`, borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: SERIF, cursor: "pointer" }}
+        >
+          {confirmRemove ? "Tap again to confirm" : "Alisin ang PIN lock"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ color: MUTED, fontSize: 14, marginBottom: 16, lineHeight: 1.5 }}>Set a 4-6 digit PIN so only your family can open the app.</div>
+      <Field label="New PIN">
+        <input style={inputStyle} type="password" inputMode="numeric" maxLength={6} value={p1} onChange={(e) => setP1(e.target.value.replace(/\D/g, ""))} />
+      </Field>
+      <Field label="Confirm PIN">
+        <input style={inputStyle} type="password" inputMode="numeric" maxLength={6} value={p2} onChange={(e) => setP2(e.target.value.replace(/\D/g, ""))} />
+      </Field>
+      {err && <div style={{ color: DANGER, fontSize: 13, marginBottom: 12 }}>{err}</div>}
+      <button onClick={submit} style={{ width: "100%", background: GOLD, color: "#141414", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontFamily: SERIF, fontWeight: 600, cursor: "pointer" }}>
+        Save PIN
+      </button>
+      {settings.pinEnabled && (
+        <button onClick={() => setEditing(false)} style={{ width: "100%", background: "transparent", color: MUTED, border: "none", padding: "12px", fontSize: 14, fontFamily: SERIF, cursor: "pointer", marginTop: 6 }}>
+          Cancel
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------- generic bottom sheet ----------
+function Sheet({ title, onClose, children }) {
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", zIndex: 20 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxHeight: "88%", overflowY: "auto", background: BG, borderTop: `1px solid ${BORDER}`, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: "20px 20px 28px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 20 }}>{title}</div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer" }}>
+            <X size={22} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) return (
+      <div className="counter-app-mounted" style={{minHeight:"100vh",background:"#0a0a0a",color:"#f3f1ea",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",textAlign:"center",fontFamily:"Georgia,serif"}}>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Something went wrong</div>
+        <div style={{fontSize:13,color:"#8c8a84",marginBottom:16,maxWidth:320}}>The app hit an error. Reloading usually fixes it.</div>
+        <div style={{fontSize:11,color:"#8c8a84",fontFamily:"monospace",maxWidth:320,wordBreak:"break-word",marginBottom:20,background:"#151515",padding:10,borderRadius:8}}>{String(this.state.error?.message || this.state.error)}</div>
+        <button onClick={() => window.location.reload()} style={{background:"#E3A93C",color:"#141414",fontWeight:700,border:"none",borderRadius:10,padding:"10px 20px",fontSize:14}}>Reload</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
+window.addEventListener("error", (e) => console.error("Global error:", e.error || e.message));
+window.addEventListener("unhandledrejection", (e) => console.error("Unhandled rejection:", e.reason));
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<ErrorBoundary><CounterApp /></ErrorBoundary>);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((e) => console.warn("SW failed", e));
+  });
+}
+</script>
+</body>
+</html>
